@@ -1,0 +1,106 @@
+void TestMolotovLighter158(ID3D11Device* device,ID3D11DeviceContext* context,ID3D11Buffer* camera){
+ TestMolotovRag176(device,context);
+ Mat4 upside167=HandIdentity();upside167.m[2]=0;upside167.m[6]=-1;upside167.m[10]=0;upside167.m[3]=.2;
+ Check(Length(Sub(LighterFlamePoint167(upside167,{0,0,0},0),Apply(upside167,{0,0,0})))<1e-8,"167 curved flame remains anchored at calibrated burner");
+ Check(LighterFlameCurve175(upside167,{0,0,.027},1,{0,1,0}).y>0,"175 upside-down flame rises toward supplied gravity direction");
+ const auto savedCamera175=g_frameCamera;const bool savedValid175=g_frameCameraValid,savedAim175=g_aimActive;
+ g_frameCamera={};g_frameCamera.right[2]=1;g_frameCamera.up[1]=1;g_frameCamera.forward[0]=1;g_frameCameraValid=true;g_aimActive=false;
+ const V3 gravity175=LighterGravity175();Check(fabs(gravity175.x-1)<1e-6&&fabs(gravity175.y)<1e-6,"175 rolled native camera converts world up to body right rather than fixed body Y");
+ Mat4 upright175=HandIdentity();upright175.m[2]=1;upright175.m[6]=upright175.m[10]=0;
+ const V3 tip175=LighterFlamePoint167(upright175,{0,0,.027},1);
+ Check(fabs(tip175.x-.027)<1e-8&&fabs(tip175.y)<1e-8,"175 gravity-aligned flame remains straight without constant sideways bend");
+ Mat4 bodyToWorld175={};Check(Invert(HullView(g_frameCamera),bodyToWorld175),"175 rolled body-to-world conversion available");
+ const V3 visible175=LighterFlameWorld175(Multiply(bodyToWorld175,upright175),{0,0,.027},1);
+ Check(Length(Sub(visible175,Apply(bodyToWorld175,tip175)))<1e-8,"175 actual world-space rendering curve agrees with transformed body-space ignition curve");
+ g_frameCamera=savedCamera175;g_frameCameraValid=savedValid175;g_aimActive=savedAim175;
+ const int oldKind167=g_throw144.kind;float oldStrength180[4];memcpy(oldStrength180,g_throw144.itemStrength180,sizeof(oldStrength180));
+ for(int i=0;i<4;++i)g_throw144.itemStrength180[i]=float(i+1)*.5f;
+ for(int i=0;i<4;++i){g_throw144.kind=i+1;Check(fabs(ThrowableBoost167()-double(i+1)*.5*kStrengthScale182)<1e-9,"182 each item reads only its own strength, scaled so 3.00 is the old 8x");}
+ g_throw144.itemStrength180[1]=3;g_throw144.kind=1;Check(fabs(ThrowableBoost167()-.5*kStrengthScale182)<1e-9,"182 Molotov slider does not alter grenade strength");
+ Check(SaveThrowables144(L"checkpoints/offline180/strength-test.ini"),"180 four strengths save");
+ for(int i=0;i<4;++i)g_throw144.itemStrength180[i]=.5f;LoadItemStrength180(L"checkpoints/offline180/strength-test.ini");
+ Check(g_throw144.itemStrength180[0]==.5f&&g_throw144.itemStrength180[1]==3&&g_throw144.itemStrength180[2]==1.5f&&g_throw144.itemStrength180[3]==2,"182 independent strengths survive save/load in the 0.2..3 range");
+ memcpy(g_throw144.itemStrength180,oldStrength180,sizeof(oldStrength180));g_throw144.kind=oldKind167;
+ auto& s=g_molotov158;s.loaded=false;s.mesh.clear();Check(LoadLighter158(L"checkpoints\\lighter159\\fc3_lighter159.mesh"),"actual extracted native lighter passes sidecar bounds/format checks");
+ Check(s.mesh.size()==1386,"native chrome lighter has462 triangles including separate lid");
+ auto oldAttachment158=g_freeHandAttachment[1];auto& attachment=g_freeHandAttachment[1];attachment.epoch=g_armPoseEpoch;attachment.frame=g_frame;attachment.profile=g_weaponMechanicProfile;attachment.relative=HandIdentity();attachment.relative.m[3]=.6781;attachment.relative.m[7]=-.0519;attachment.relative.m[11]=-1.0387;
+ const auto oldInput158=fc3pad::Latest();auto input158=oldInput158;input158.leftGrip=1;input158.leftTrigger=1;input158.active=true;fc3pad::Publish(input158);TickMolotov158();
+ Check(s.held&&!s.flame&&s.lid<1,"LEFT GRIP holds lighter; trigger starts bounded lid opening before flame");
+ s.openedAt=GetTickCount64()-200;TickMolotov158();Check(s.held&&s.flame&&s.lid==1&&s.stage159==3,"holding LT opens chrome lid and lights flame at full travel");
+ input158.leftTrigger=0;fc3pad::Publish(input158);TickMolotov158();Check(s.held&&!s.flame&&s.stage159==2,"releasing LT immediately extinguishes flame and starts closing lid");
+ s.openedAt=GetTickCount64()-200;TickMolotov158();Check(s.lid==0&&s.stage159==0,"released LT returns lid to closed end stop");
+ input158.leftTrigger=1;fc3pad::Publish(input158);TickMolotov158();s.openedAt=GetTickCount64()-200;TickMolotov158();Check(s.flame&&s.lid==1,"holding LT again opens and lights without an extra click");
+ float fingers158[576]={};for(int b=0;b<48;++b)StoreBone(fingers158,b,HandIdentity());Check(MolotovFingers158(1,fingers158)&&!MolotovFingers158(0,fingers158),"lighter uses bounded native offhand pinch fingers only");
+ V3 wick158={};Check(MolotovWickBody158(wick158),"wick resolves through exact displayed cloth palette");
+ const double rightBefore158=g_handBody[0][3];g_handBody[0][3]+=.13f;V3 movedWick158={};Check(MolotovWickBody158(movedWick158)&&fabs(movedWick158.x-wick158.x-.13)<1e-4,"rag flame/contact anchor follows displayed cloth with controller motion");g_handBody[0][3]=rightBefore158;
+ float rawCamera158[224]={};rawCamera158[0]=rawCamera158[5]=rawCamera158[10]=rawCamera158[15]=1;camera->SetPrivateData(kCbCopyGuid,sizeof(rawCamera158),rawCamera158);
+ ID3D11Buffer* oldEyes158[2]={g_eyeCb[1][0],g_eyeCb[1][1]};for(int eye=0;eye<2;++eye){float delta158[64]={};delta158[3]=eye?.035f:-.035f;g_eyeCb[1][eye]=Buffer(device,sizeof(delta158),D3D11_BIND_CONSTANT_BUFFER);g_eyeCb[1][eye]->SetPrivateData(kCbCopyGuid,sizeof(delta158),delta158);}
+ // A lit lighter at a distance cannot request native fire. Actual contact
+ // must persist; moving away clears the dwell and tracking loss extinguishes.
+ Check(!s.requested,"lit lighter away from wick does not request ignition");
+ Mat4 lighter159={},inverse159={};Check(LighterBody158(lighter159)&&Invert(lighter159,inverse159),"anatomical lighter basis follows drawn hand");
+ V3 nearest159={};double distance159=0;const V3 flame159=Apply(LighterFlame163(lighter159),{0,0,0});Check(RagContact159(flame159,nearest159,distance159),"rag capsule resolves displayed cloth segment");
+ const float savedOffset158[3]={s.offset[0],s.offset[1],s.offset[2]},savedRotation164[3]={s.rotation[0],s.rotation[1],s.rotation[2]};for(int k=0;k<3;++k)s.offset[k]=s.rotation[k]=0;Mat4 base164={},baseInverse164={};Check(LighterBody158(base164)&&Invert(base164,baseInverse164),"unrotated attachment basis for calibration translation");for(int k=0;k<3;++k){s.offset[k]=savedOffset158[k];s.rotation[k]=savedRotation164[k];}const V3 move159=Sub(Apply(baseInverse164,nearest159),Apply(baseInverse164,flame159));for(int k=0;k<3;++k)s.offset[k]+=float((&move159.x)[k]);
+ TickMolotov158();Check(s.contact&&!s.requested,"rag capsule starts contact dwell without arming native Molotov in lighter-only checkpoint");
+ s.contact=GetTickCount64()-120;TickMolotov158();Check(s.contactFeedback159&&s.requested&&!s.lit,"flame contact queues native ignition, not a visual-only lit flag");fc3throw::PumpArm155(g_throw144.prepared.strategy,g_throw144.prepared.nativeWrapper149);TickMolotov158();Check(s.lit&&fc3throw::MolotovLit158(g_throw144.prepared),"native update acknowledges exact bottle ignition after physical contact");
+ input158.leftTrigger=0;fc3pad::Publish(input158);TickMolotov158();Check(!s.contact&&!s.flame&&s.lit,"releasing LT extinguishes lighter but bottle remains natively lit");
+ for(int i=0;i<3;++i)s.offset[i]=savedOffset158[i];input158.leftGrip=0;fc3pad::Publish(input158);TickMolotov158();Check(!s.held&&!s.flame&&s.lid==0,"releasing LEFT GRIP stows and extinguishes lighter independently of bottle");
+ // Y while holding the lighter must not become weapon-wheel/native throw input.
+ input158.leftGrip=1;input158.y=false;fc3pad::Publish(input158);TickMolotov158();input158.y=true;fc3pad::Publish(input158);Check(!fc3pad::Latest().y&&!fc3pad::WeaponWheelRequested145(),"lighter consumes Y instead of releasing bottle through weapon wheel");input158.y=false;fc3pad::Publish(input158);
+ s.held=s.flame=s.lit=true;s.visualFrame=-100000;CaptureMolotovVisual158(context);
+ Check(s.visualFrame==g_frame&&s.clip[0].size()>1386*20&&s.clip[0].size()==s.clip[1].size(),"native lighter geometry and both flame anchors project into both actual eye packets");
+ Check(fabs(s.clip[0][0]-s.clip[1][0])>.01,"lighter rendering uses distinct stereo eye matrices");
+ D3D11_TEXTURE2D_DESC td={};td.Width=td.Height=128;td.MipLevels=td.ArraySize=1;td.Format=DXGI_FORMAT_R8G8B8A8_UNORM;td.SampleDesc.Count=1;td.BindFlags=D3D11_BIND_RENDER_TARGET;ID3D11Texture2D* target158=nullptr;Check(SUCCEEDED(device->CreateTexture2D(&td,nullptr,&target158)),"lighter GPU target");
+ ID3D11RenderTargetView* rtv158=nullptr;device->CreateRenderTargetView(target158,nullptr,&rtv158);const float black158[4]={};context->ClearRenderTargetView(rtv158,black158);ID3D11ShaderResourceView* oldTextures159[3]={};ID3D11SamplerState* oldSampler159=nullptr;context->PSGetShaderResources(0,3,oldTextures159);context->PSGetSamplers(0,1,&oldSampler159);
+ // Capture native arm depth, then clear the source as a later game pass would.
+ Check(MolotovResources158(device),"initialize lighter before capturing scene depth");
+ D3D11_TEXTURE2D_DESC depthDesc161=td;depthDesc161.Format=DXGI_FORMAT_D32_FLOAT;depthDesc161.BindFlags=D3D11_BIND_DEPTH_STENCIL;ID3D11Texture2D* nativeDepth161=nullptr;ID3D11DepthStencilView* nativeView161=nullptr;
+ Check(SUCCEEDED(device->CreateTexture2D(&depthDesc161,nullptr,&nativeDepth161))&&SUCCEEDED(device->CreateDepthStencilView(nativeDepth161,nullptr,&nativeView161)),"native arm depth fixture");
+ D3D11_VIEWPORT depthVp161={0,0,128,128,0,1};context->RSSetViewports(1,&depthVp161);context->OMSetDepthStencilState(g_lighterDepthState160,0);context->ClearDepthStencilView(nativeView161,D3D11_CLEAR_DEPTH,1,0);CaptureLighterDepth161(context,nativeView161,nativeView161);
+ Check(g_lighterScene161.frame==g_frame,"arm depth captured for both eyes in current frame");
+ // Exercise the production arm classifier. A successful pose changes variant
+ // to1; requiring3/4 after that silently prevented all161 depth captures.
+ ID3D11VertexShader* previousVs162=nullptr;context->VSGetShader(&previousVs162,nullptr,nullptr);ID3D11PixelShader* previousPs162=nullptr;context->PSGetShader(&previousPs162,nullptr,nullptr);
+ auto* code162=HullCompile("float4 main(uint id:SV_VertexID):SV_Position{return float4(id==0?-.5:.5,id==2?.5:-.5,.1,1);}","vs_5_0");ID3D11VertexShader* armVs162=nullptr;Check(code162&&SUCCEEDED(device->CreateVertexShader(code162->GetBufferPointer(),code162->GetBufferSize(),nullptr,&armVs162)),"production arm classifier shader");SafeRelease(code162);SetFlag(armVs162,kVsPatchedGuid,1);const auto armHash162=kArmVsHash;armVs162->SetPrivateData(kShaderHashGuid,sizeof(armHash162),&armHash162);
+ code162=HullCompile("float4 main():SV_Target{return float4(1,0,0,1);}","ps_5_0");ID3D11PixelShader* armPs162=nullptr;Check(code162&&SUCCEEDED(device->CreatePixelShader(code162->GetBufferPointer(),code162->GetBufferSize(),nullptr,&armPs162)),"arm pixel shader");SafeRelease(code162);
+ ID3D11Texture2D* rightDepth162=nullptr;ID3D11DepthStencilView* rightView162=nullptr;Check(SUCCEEDED(device->CreateTexture2D(&depthDesc161,nullptr,&rightDepth162))&&SUCCEEDED(device->CreateDepthStencilView(rightDepth162,nullptr,&rightView162)),"right arm depth");nativeView161->SetPrivateDataInterface(kTwinGuid,rightView162);rtv158->SetPrivateDataInterface(kTwinGuid,rtv158);
+ CameraSummary oldCamera162={};UINT cameraBytes162=sizeof(oldCamera162);camera->GetPrivateData(kCameraSummaryGuid,&cameraBytes162,&oldCamera162);auto armCamera162=oldCamera162;armCamera162.xScale=2;camera->SetPrivateData(kCameraSummaryGuid,sizeof(armCamera162),&armCamera162);const float oldMain162=g_mainXScale;g_mainXScale=1;
+ context->VSSetShader(armVs162,nullptr,0);context->PSSetShader(armPs162,nullptr,0);context->OMSetRenderTargets(1,&rtv158,nativeView161);context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+ Check(MeasureArm(context)>=0,"integration draw is a measurable native arm");g_lighterScene161.frame=-1;const auto oldDraw162=g_oDrawIndexed;g_oDrawIndexed=[](ID3D11DeviceContext* c,UINT,UINT,INT){c->Draw(3,0);};DrawCall armDraw162={};armDraw162.a=3;HandleDraw(context,armDraw162);g_oDrawIndexed=oldDraw162;
+ Check(g_lighterScene161.frame==g_frame,"actual HandleDraw captures posed native arm depth after variant changes to1");
+ context->VSSetShader(previousVs162,nullptr,0);context->PSSetShader(previousPs162,nullptr,0);SafeRelease(previousVs162);SafeRelease(previousPs162);SafeRelease(armVs162);SafeRelease(armPs162);nativeView161->SetPrivateDataInterface(kTwinGuid,nullptr);rtv158->SetPrivateDataInterface(kTwinGuid,nullptr);SafeRelease(rightView162);SafeRelease(rightDepth162);g_mainXScale=oldMain162;camera->SetPrivateData(kCameraSummaryGuid,sizeof(oldCamera162),&oldCamera162);
+ context->ClearDepthStencilView(nativeView161,D3D11_CLEAR_DEPTH,1,0);CaptureLighterDepth161(context,nativeView161,nativeView161);
+
+ auto oldCtx158=g_ctx;g_ctx=context;RenderMolotov158(target158,target158);g_ctx=oldCtx158;
+ ID3D11ShaderResourceView* afterTextures159[3]={};ID3D11SamplerState* afterSampler159=nullptr;context->PSGetShaderResources(0,3,afterTextures159);context->PSGetSamplers(0,1,&afterSampler159);Check(oldSampler159==afterSampler159,"chrome material restores native sampler binding");for(int i=0;i<3;++i){Check(oldTextures159[i]==afterTextures159[i],"chrome material restores each native texture binding");SafeRelease(oldTextures159[i]);SafeRelease(afterTextures159[i]);}SafeRelease(oldSampler159);SafeRelease(afterSampler159);
+ td.Usage=D3D11_USAGE_STAGING;td.BindFlags=0;td.CPUAccessFlags=D3D11_CPU_ACCESS_READ;ID3D11Texture2D* read158=nullptr;device->CreateTexture2D(&td,nullptr,&read158);context->CopyResource(read158,target158);D3D11_MAPPED_SUBRESOURCE map158={};Check(SUCCEEDED(context->Map(read158,0,D3D11_MAP_READ,0,&map158)),"read lighter GPU pixels");unsigned coloured158=0;for(unsigned y=0;y<128;++y)for(unsigned x=0;x<128;++x){const auto* p=static_cast<const BYTE*>(map158.pData)+y*map158.RowPitch+x*4;if(p[0]||p[1]||p[2])++coloured158;}context->Unmap(read158,0);Check(coloured158>5,"real lighter renderer produces coloured native-mesh/flame pixels on WARP");
+ // Deliberately submit the near face BEFORE the far face. Painter sorting
+ // by triangle centre cannot make this GPU occlusion test pass by itself.
+ float overlap160[6][20]={};const float xy160[3][2]={{-.7f,-.7f},{.7f,-.7f},{0,.7f}};
+ for(int i=0;i<6;++i){overlap160[i][0]=xy160[i%3][0];overlap160[i][1]=xy160[i%3][1];overlap160[i][2]=i<3?.2f:.8f;overlap160[i][3]=1;overlap160[i][i<3?4:5]=1;overlap160[i][7]=1;}
+ context->ClearRenderTargetView(rtv158,black158);DrawMolotovMesh158(context,target158,&overlap160[0][0],6);context->CopyResource(read158,target158);
+ Check(SUCCEEDED(context->Map(read158,0,D3D11_MAP_READ,0,&map158)),"read private lighter depth result");const auto* centre160=static_cast<const BYTE*>(map158.pData)+64*map158.RowPitch+64*4;Check(centre160[0]>200&&centre160[1]<20,"near lighter face occludes later submitted far face at pixel level");context->Unmap(read158,0);
+ // A later clear of native depth must not erase captured arm occlusion.
+ context->ClearDepthStencilView(nativeView161,D3D11_CLEAR_DEPTH,.1f,0);CaptureLighterDepth161(context,nativeView161,nativeView161);context->ClearDepthStencilView(nativeView161,D3D11_CLEAR_DEPTH,1,0);
+ context->ClearRenderTargetView(rtv158,black158);DrawMolotovMesh158(context,target158,&overlap160[0][0],6,0);context->CopyResource(read158,target158);Check(SUCCEEDED(context->Map(read158,0,D3D11_MAP_READ,0,&map158)),"read native arm occlusion result");const auto* blocked161=static_cast<const BYTE*>(map158.pData)+64*map158.RowPitch+64*4;Check(blocked161[0]==0&&blocked161[1]==0,"captured arm occludes lighter even after native source is cleared");context->Unmap(read158,0);
+ SafeRelease(nativeView161);SafeRelease(nativeDepth161);
+ // Preserve an actual material-rendered mesh close-up for visual inspection.
+ std::vector<float> preview160;for(size_t i=0;i+60<=s.clip[0].size();i+=60)if(s.clip[0][i+7]==0)preview160.insert(preview160.end(),s.clip[0].begin()+i,s.clip[0].begin()+i+60);
+ float minX160=1e9f,maxX160=-1e9f,minY160=1e9f,maxY160=-1e9f;for(size_t i=0;i<preview160.size();i+=20){minX160=(std::min)(minX160,preview160[i]);maxX160=(std::max)(maxX160,preview160[i]);minY160=(std::min)(minY160,preview160[i+1]);maxY160=(std::max)(maxY160,preview160[i+1]);}
+ const float zoom160=1.6f/(std::max)(maxX160-minX160,maxY160-minY160);for(size_t i=0;i<preview160.size();i+=20){preview160[i]=(preview160[i]-(minX160+maxX160)*.5f)*zoom160;preview160[i+1]=(preview160[i+1]-(minY160+maxY160)*.5f)*zoom160;}
+ context->ClearRenderTargetView(rtv158,black158);DrawMolotovMesh158(context,target158,preview160.data(),UINT(preview160.size()/20));context->CopyResource(read158,target158);
+ Check(SUCCEEDED(context->Map(read158,0,D3D11_MAP_READ,0,&map158)),"read real chrome material preview");HANDLE previewFile160=CreateFileW(L"checkpoints\\lighter163\\lighter-preview.rgba",GENERIC_WRITE,FILE_SHARE_READ,nullptr,CREATE_ALWAYS,FILE_ATTRIBUTE_NORMAL,nullptr);if(previewFile160!=INVALID_HANDLE_VALUE){DWORD written160=0;for(UINT y=0;y<128;++y)WriteFile(previewFile160,static_cast<const BYTE*>(map158.pData)+y*map158.RowPitch,128*4,&written160,nullptr);CloseHandle(previewFile160);}context->Unmap(read158,0);
+ std::puts("PASS:160 actual lighter near/far GPU occlusion and native material preview.");
+ read158->Release();rtv158->Release();target158->Release();
+ // Preview must work without a held Molotov, grip, or trigger while Insert is open.
+ const bool oldOwned163=g_throw144.owned,oldMenu163=g_pistolMenu.open;g_throw144.owned=false;g_pistolMenu.open=true;s.calibrate163=true;s.previewOpen163=true;s.held=s.flame=false;s.visualFrame=-100000;
+ Check(LighterPreview163()&&LighterActive163(),"Insert lighter preview does not require throwable ownership or held grip");CaptureMolotovVisual158(context);Check(s.visualFrame==g_frame&&s.clip[0].size()>1386*20,"Insert preview emits native lighter mesh and flame while gameplay lighter is stowed");
+ float pose163[576]={};StoreBone(pose163,2,HandIdentity());Check(MolotovFingers158(1,pose163),"preview applies the same holding fingers while Insert is open");
+ Mat4 base163={};Check(LighterBody158(base163),"preview baseline attachment");s.scale163=2;Mat4 scaled163={};Check(LighterBody158(scaled163),"scaled preview attachment");Check(fabs(Length(Sub(Apply(scaled163,{1,0,0}),Apply(scaled163,{0,0,0})))-2)<1e-5,"lighter model scale reaches actual attachment transform");s.flameOffset163[0]=.025f;s.flameRotation163[1]=45;s.flameScale163[2]=1.7f;const Mat4 fire163=LighterFlame163(scaled163);Check(fabs(Length(Sub(Apply(fire163,{0,0,1}),Apply(fire163,{0,0,0})))-3.4)<1e-4,"flame scale inherits lighter scale and independent height");
+ const wchar_t* path163=L"build\\stereo\\lighter163.ini";DeleteFileW(path163);LoadLighterSettings163(path163);for(int n=0;n<16;++n)Check(*LighterValue163(n)==kLighterDefaults164[n],"missing settings load user-accepted lighter/flame defaults");s.scale163=2;s.flameOffset163[0]=.025f;s.flameRotation163[1]=45;s.flameScale163[2]=1.7f;s.offset[0]=.031f;s.rotation[2]=37;Check(SaveLighterSettings163(path163),"save lighter calibration defaults");for(int n=0;n<16;++n)*LighterValue163(n)=0;LoadLighterSettings163(path163);Check(fabs(s.offset[0]-.031f)<1e-6&&s.rotation[2]==37&&s.scale163==2&&fabs(s.flameOffset163[0]-.025f)<1e-6&&s.flameRotation163[1]==45&&fabs(s.flameScale163[2]-1.7f)<1e-5,"all mesh and flame transforms reload as saved defaults");WritePrivateProfileStringW(L"LighterCalibration",L"Scale",L"nan",path163);WritePrivateProfileStringW(L"LighterCalibration",L"FlameScaleX",L"-2",path163);LoadLighterSettings163(path163);Check(s.scale163==1&&s.flameScale163[0]==kLighterDefaults164[13],"invalid calibration scales safely default");DeleteFileW(path163);
+ const auto savedRag177=g_molotovRag177;g_molotovRag177.contact[0]=.012f;g_molotovRag177.flame[1]=-.023f;g_molotovRag177.radius=.04f;Check(SaveMolotovRag177(path163),"177 save independent rag contact and native flame calibration");g_molotovRag177={};LoadMolotovRag177(path163);Check(fabs(g_molotovRag177.contact[0]-.012f)<1e-6&&fabs(g_molotovRag177.flame[1]+.023f)<1e-6&&fabs(g_molotovRag177.radius-.04f)<1e-6,"177 independent rag values persist for next launch");WritePrivateProfileStringW(L"MolotovRag",L"ContactRadius",L"nan",path163);WritePrivateProfileStringW(L"MolotovRag",L"FlameZ",L"99",path163);LoadMolotovRag177(path163);Check(g_molotovRag177.radius==.025f&&g_molotovRag177.flame[2]==0,"177 invalid rag values default safely");DeleteFileW(path163);g_molotovRag177=savedRag177;
+ g_pistolMenu.open=false;Check(!LighterPreview163()&&!LighterActive163(),"closing Insert ends preview without spawning a gameplay lighter");s.calibrate163=false;g_pistolMenu.open=oldMenu163;g_throw144.owned=oldOwned163;for(int n=0;n<16;++n)*LighterValue163(n)=kLighterDefaults164[n];
+ for(int eye=0;eye<2;++eye){g_eyeCb[1][eye]->Release();g_eyeCb[1][eye]=oldEyes158[eye];}
+ g_freeHandAttachment[1]=oldAttachment158;fc3pad::Publish(oldInput158);ResetMolotov158();
+ std::puts("PASS:159 159 native chrome mesh/materials, hold-LT open/light and release-LT close/extinguish, bounded offhand fingers, cloth-following rag anchor, stereo projection and real WARP draw pixels.");
+}

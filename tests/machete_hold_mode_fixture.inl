@@ -1,0 +1,40 @@
+void TestMacheteHoldModes(ID3D11Device* device)
+{
+    ClearMacheteVisual();g_dev=device;g_macheteMelee=MacheteMeleeState{};
+    g_macheteEnabled=true;g_reload=PhysicalReloadState{};g_reloadPose=ReloadPoseCycle{};g_reloadAlignment=false;
+    g_enabled=g_motionGun=g_eyeViewsSet=g_handRightValid=true;
+    wchar_t folder[MAX_PATH]={},ini[MAX_PATH]={};GetTempPathW(MAX_PATH,folder);
+    Check(GetTempFileNameW(folder,L"mch",0,ini)!=0,"hold-mode fixture settings file");
+    Check(WritePrivateProfileStringW(L"Machete",L"HoldToDraw",L"1",ini)!=0,"save hold-both mode");
+    LoadMacheteSettings(ini);Check(g_macheteHoldToDraw,"saved HoldToDraw setting enables hold-both mode");
+    for(auto& p:g_machete.parts)p.ready=true;
+    Check(SUCCEEDED(device->CreateDeferredContext(0,&g_machete.deferred)),"hold-mode deferred context");
+    fc3pad::Controllers c={};c.active=true;fc3pad::Publish(c);TickMachete(true);
+    c.rightGrip=1;fc3pad::Publish(c);TickMachete(true);Check(!MacheteHeld(),"right grip alone cannot draw in hold-both mode");
+    c.rightStickClick=true;fc3pad::Publish(c);TickMachete(true);Check(MacheteHeld(),"holding both buttons draws the cached machete");
+    TickMachete(true);Check(MacheteHeld()&&!(fc3pad::ButtonsOutput()&0x0080),"holding both buttons retains the machete without a native attack loop");
+    Check(fc3pad::RequestMacheteAttack()&&(fc3pad::ButtonsOutput()&0x0080),"hold-mode chord permits the independent native attack pulse");
+    fc3pad::CancelMacheteSource();Check(fc3pad::ButtonsOutput()&0x0080,"visual cache does not cancel hold-mode attacks");
+    c.rightGrip=0;fc3pad::Publish(c);TickMachete(true);
+    Check(!MacheteHeld()&&!(fc3pad::ButtonsOutput()&0x0080),"grip release puts away and consumes still-held R3 without a native swipe");
+    TickMachete(true);Check(!MacheteHeld(),"a released combination cannot redraw automatically");
+    c.rightGrip=1;fc3pad::Publish(c);TickMachete(true);
+    Check(MacheteHeld(),"pressing grip with already-held R3 is a fresh hold combination");
+    c.rightStickClick=false;fc3pad::Publish(c);TickMachete(true);Check(!MacheteHeld(),"stick-click release also puts away");
+    c.rightStickClick=true;fc3pad::Publish(c);TickMachete(true);Check(MacheteHeld(),"both buttons can explicitly redraw");
+    c.leftStickClick=true;fc3pad::Publish(c);TickMachete(true);
+    Check(!MacheteHeld()&&!(fc3pad::ButtonsOutput()&0x0080),"both-stick calibration stows and cannot issue melee");
+    TickMachete(true);Check(!MacheteHeld(),"calibration hold cannot reacquire the machete");
+    c.leftStickClick=c.rightStickClick=false;c.rightGrip=0;fc3pad::Publish(c);TickMachete(true);
+    Check(WritePrivateProfileStringW(L"Machete",L"HoldToDraw",L"0",ini)!=0,"save default toggle mode");
+    LoadMacheteSettings(ini);Check(!g_macheteHoldToDraw,"saved Toggle mode restores accepted default");
+    c.rightGrip=1;c.rightStickClick=true;fc3pad::Publish(c);TickMachete(true);Check(MacheteHeld(),"toggle mode still draws with the original chord");
+    c.rightGrip=0;c.rightStickClick=false;fc3pad::Publish(c);TickMachete(true);
+    Check(MacheteHeld(),"toggle mode remains held after releasing both buttons");
+    c.rightGrip=1;c.rightStickClick=true;fc3pad::Publish(c);TickMachete(true);Check(!MacheteHeld(),"a fresh toggle chord still puts away");
+    c.rightGrip=0;fc3pad::Publish(c);Check(!(fc3pad::ButtonsOutput()&0x0080),"toggle stow also consumes a still-held R3 when grip releases first");
+    c.rightStickClick=false;fc3pad::Publish(c);TickMachete(false);
+    c.rightStickClick=true;fc3pad::Publish(c);Check(fc3pad::ButtonsOutput()&0x0080,"fresh ordinary R3 restores stock melee after release");
+    c={};c.active=true;fc3pad::Publish(c);ClearMacheteVisual();g_dev=nullptr;DeleteFileW(ini);
+    std::puts("PASS: saved machete Toggle/Hold-both modes; either-button release, fresh combination, retained cached visual and native attack pulse in hold mode, calibration exclusion, consumed R3 on stow, original toggle and ordinary stock swipe restored");
+}

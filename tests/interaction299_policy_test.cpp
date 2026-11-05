@@ -1,0 +1,12 @@
+#include "../src/options_pointer299.h"
+#include <cstdio>
+#include <cstdlib>
+void Check(bool ok,const char* why){if(!ok){fprintf(stderr,"FAIL: %s\n",why);exit(1);}printf("PASS: %s\n",why);}
+int main(){
+ fc3ui::OptionsChord299 chord;Check(!chord.Step(true,true,1,0).toggle,"held menu at startup cannot open settings");chord.Step(true,false,1,0);auto step=chord.Step(true,true,1,0);Check(step.toggle&&step.consume,"fresh right grip+Menu opens settings and reserves native Menu");Check(!chord.Step(true,true,1,0).toggle,"held chord cannot toggle repeatedly");step=chord.Step(true,true,0,0);Check(!step.toggle&&step.consume,"releasing grip first cannot open native pause");chord.Step(false,true,0,0);Check(chord.Step(true,true,0,0).consume,"tracking recovery retains owned menu until release");chord.Step(true,false,0,0);Check(!chord.Step(true,true,0,1).consume,"left grip+Menu keeps native map binding");chord.Step(true,false,0,0);Check(!chord.Step(true,true,0,0).consume,"ordinary Menu keeps pause binding");chord.Step(true,false,0,0);Check(!chord.Step(true,true,NAN,0).consume,"invalid grip cannot request settings");
+ float u,v;const float scale=fc3ui::OptionsMetres299(1920,1080);Check(fc3ui::OptionsHit299({0,0,0},{0,0,-1},1920,1080,300,100,1000,800,false,u,v)&&u==.5f&&v==.5f,"controller intersects centred full virtual desktop inside cropped settings");
+ const float px=850,py=320;Check(fc3ui::OptionsHit299({(px-960)*scale,(540-py)*scale,.3f},{0,0,-1},1920,1080,300,100,1000,800,false,u,v)&&std::fabs(u-px/1920)<1e-5f&&std::fabs(v-py/1080)<1e-5f,"settings ray retains exact pixel positions after crop, scale and controller translation");
+ const fc3ui::RayPoint298 outside={(1500-960)*scale,0,0};Check(!fc3ui::OptionsHit299(outside,{0,0,-1},1920,1080,300,100,1000,800,false,u,v)&&fc3ui::OptionsHit299(outside,{0,0,-1},1920,1080,300,100,1000,800,true,u,v),"drag may leave current crop but new press cannot hit invisible settings");
+ Check(!fc3ui::OptionsHit299({0,0,0},{0,0,1},1920,1080,0,0,1920,1080,false,u,v),"away-facing controller cannot touch settings");Check(!fc3ui::OptionsHit299({NAN,0,0},{0,0,-1},1920,1080,0,0,1920,1080,false,u,v),"invalid tracking cannot touch settings");Check(!fc3ui::OptionsHit299({0,0,0},{0,0,-1},1920,1080,1900,0,100,100,false,u,v),"invalid crop refused");
+ puts("PASS:299 settings chord ownership, map/pause preservation, exact cropped-quad pointer geometry and drag safety");
+}

@@ -1,0 +1,17 @@
+# Build output (scripts\build.bat and the test scripts write here)
+build/
+*.obj
+*.pdb
+*.ilk
+*.exp
+*.lib
+!third_party/openxr/lib/openxr_loader.lib
+*.log
+
+# Editor/OS files
+*.user
+*.suo
+.vs/
+.vscode/
+Thumbs.db
+desktop.ini

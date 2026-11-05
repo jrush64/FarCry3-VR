@@ -1,0 +1,34 @@
+void TestPistolBasis47(ID3D11Device* d,ID3D11DeviceContext* c){
+ const LONG savedAttachmentProfile=g_pistolAttachProfile220;PistolAttachment savedAttachments[32];memcpy(savedAttachments,g_pistolAttach,sizeof(savedAttachments));
+ const auto prior=g_pistolReload;const auto controls=fc3pad::Latest();const auto anchor=g_1911FrameFinal,pending=g_1911FramePending;const LONG frame=g_frame,profile=g_weaponMechanicProfile,mechanic=g_weaponMechanicFrame;
+ const bool motion=g_motionGun,guard=g_weaponMotionGuard,right=g_handRightValid,left=g_handLeftValid,two=g_twoHand,aim=g_aimActive;double aimQ[3][3];memcpy(aimQ,g_aimQ,sizeof(aimQ));
+ g_motionGun=g_handRightValid=g_handLeftValid=true;g_weaponMotionGuard=false;g_twoHand=false;g_aimActive=true;g_weaponMechanicProfile=20;g_weaponMechanicFrame=++g_frame;fc3pad::Controllers active={};active.active=true;fc3pad::Publish(active);
+ g_pistolReload=PistolReloadState{};auto& p=g_pistolReload;p.enabled=true;p.rootFrame=p.rootNativeFrame=g_frame;p.rootEpoch=g_armPoseEpoch;p.rootContext=c;p.rootBody=HandIdentity();p.rootBody.m[3]=.22;p.rootBody.m[7]=-.4;p.rootBody.m[11]=.65;p.rootNative=HandIdentity();p.rootNative.m[3]=1200;p.rootNative.m[7]=80;p.rootNative.m[11]=600;
+ ID3D11Buffer* vb=Buffer(d,177904,D3D11_BIND_VERTEX_BUFFER),*ib=Buffer(d,32682,D3D11_BIND_INDEX_BUFFER),*camera=Buffer(d,896,D3D11_BIND_CONSTANT_BUFFER),*world=Buffer(d,352,D3D11_BIND_CONSTANT_BUFFER),*sight=Buffer(d,48520,D3D11_BIND_VERTEX_BUFFER);UINT stride=32,offset=240;c->IASetVertexBuffers(0,1,&vb,&stride,&offset);c->IASetIndexBuffer(ib,DXGI_FORMAT_R16_UINT,0);c->VSSetConstantBuffers(1,1,&camera);p.rootVertex=reinterpret_cast<uintptr_t>(vb);
+ CameraSummary cam={};cam.mainView=1;cam.right[0]=cam.up[1]=cam.forward[2]=1;cam.xScale=1.5544246f;cam.yScale=2.790552f;cam.position[0]=1200;cam.position[1]=80;cam.position[2]=600;camera->SetPrivateData(kCameraSummaryGuid,sizeof(cam),&cam);
+ const Mat4 body=p.rootBody;for(int r=0;r<3;++r)for(int k=0;k<3;++k)g_aimQ[r][k]=r==k;Pistol1911DrawRoot(c);const Mat4 oldWorld=p.rootWorld;
+ const auto oldPlacement=g_guideShaderPlacement[1];const LONG oldPlacementFrame=g_guideShaderPlacementFrame[1];g_guideShaderPlacement[1]=HandIdentity();g_guideShaderPlacementFrame[1]=g_frame;
+ for(int crouch=0;crouch<2;++crouch)for(int step=1;step<=20;++step){
+  const double a=step*.025;g_aimQ[0][0]=g_aimQ[2][2]=cos(a);g_aimQ[0][2]=sin(a);g_aimQ[2][0]=-sin(a);cam.position[1]=80.f-crouch*.55f;camera->SetPrivateData(kCameraSummaryGuid,sizeof(cam),&cam);
+  p.rootWorld=oldWorld;float globals[88]={};WritePistolWorld(globals,oldWorld);PistolFinalWorld(c,18,276,p.rootNative,globals);
+  Mat4 inverse={};Invert(ArmBodyToCamera(),inverse);const Mat4 rendered=Multiply(inverse,Multiply(HullView(cam),HullWorld(globals)));for(int i=0;i<16;++i)Check(fabs(rendered.m[i]-body.m[i])<2e-6,"same-frame new aim/crouch camera retains established FRAME body attachment");
+  Stage1911Frame(c,18,276,globals,world);Confirm1911Frame(c,18,276,world,1);for(int i=0;i<16;++i)Check(fabs(g_1911FrameFinal.body.m[i]-body.m[i])<2e-6,"guide snapshot agrees with refreshed actual draw space");
+  const auto final=g_1911FrameFinal;Stage1911Frame(c,294,4470,globals,world);Confirm1911Frame(c,294,4470,world,1);Check(!memcmp(&final,&g_1911FrameFinal,sizeof(final)),"another body piece cannot replace insertion FRAME ownership");
+  Mat4 relative=HandIdentity();relative.m[3]=.04;relative.m[7]=.02;const Mat4 attachment=Multiply(p.rootNative,relative);float native[88]={};WritePistolWorld(native,attachment);world->SetPrivateData(kCbCopyGuid,sizeof(native),native);c->VSSetConstantBuffers(0,1,&world);UINT sightStride=40,sightOffset=1680;c->IASetVertexBuffers(0,1,&sight,&sightStride,&sightOffset);
+  p.rootWorld=oldWorld;Mat4 move={};Check(PistolAttachmentMove(c,3330,186,move),"actual glass attachment accepts fresh root after camera/basis reconciliation");const Mat4 drawn=Multiply(inverse,Multiply(move,Multiply(HullView(cam),attachment))),wanted=Multiply(body,relative);for(int i=0;i<16;++i)Check(fabs(drawn.m[i]-wanted.m[i])<2e-6,"glass corrected placement matches FRAME body after midframe aim/crouch change");c->IASetVertexBuffers(0,1,&vb,&stride,&offset);
+  p.rootWorld=oldWorld;Pistol1911DrawRoot(c);Mat4 expected=Multiply(ArmBodyToCamera(),body);const Mat4 actual=Multiply(HullView(cam),p.rootWorld);for(int i=0;i<16;++i)Check(fabs(actual.m[i]-expected.m[i])<1e-9,"attachment world refresh uses current camera and aim basis without changing body pose");
+ }
+ Check(!memcmp(&body,&p.rootBody,sizeof(body)),"per-draw conversion never relearns hand attachment");
+ memcpy(g_pistolAttach,savedAttachments,sizeof(savedAttachments));g_pistolReload=prior;fc3pad::Publish(controls);g_1911FrameFinal=anchor;g_1911FramePending=pending;g_frame=frame;g_weaponMechanicProfile=profile;g_weaponMechanicFrame=mechanic;g_motionGun=motion;g_weaponMotionGuard=guard;g_handRightValid=right;g_handLeftValid=left;g_twoHand=two;g_aimActive=aim;memcpy(g_aimQ,aimQ,sizeof(aimQ));g_guideShaderPlacement[1]=oldPlacement;g_guideShaderPlacementFrame[1]=oldPlacementFrame;c->ClearState();vb->Release();ib->Release();camera->Release();world->Release();sight->Release();
+ g_pistolAttachProfile220=savedAttachmentProfile;
+ puts("PASS: basis47 same-frame aim/crouch camera reconciliation preserves established FRAME/guide and attachment body pose; excludes other root pieces");
+}
+
+void TestCameraTrace47(ID3D11Device* d){
+ const LONG profile=g_weaponMechanicProfile;g_weaponMechanicProfile=20;
+ ID3D11Buffer* source=Buffer(d,896,D3D11_BIND_CONSTANT_BUFFER),*dest=Buffer(d,896,D3D11_BIND_CONSTANT_BUFFER);CameraSummary camera={};camera.mainView=1;source->SetPrivateData(kCameraSummaryGuid,sizeof(camera),&camera);
+ float bytes[224],actual[224];for(int i=0;i<224;++i)bytes[i]=i*.01f;source->SetPrivateData(kCbCopyGuid,sizeof(bytes),bytes);CarryCameraSummary(dest,source);Check(ReadCopy(dest,actual,sizeof(actual))==sizeof(actual),"complete source camera shadow follows copied buffer");Compare(actual,bytes,224,"camera shadow exact");
+ source->SetPrivateData(kCbCopyGuid,0,nullptr);CarryCameraSummary(dest,source);Check(ReadCopy(dest,actual,sizeof(actual))==0,"missing camera shadow cannot leave stale destination evidence");
+ source->SetPrivateData(kCbCopyGuid,sizeof(bytes),bytes);CarryCameraSummary(dest,source);g_weaponMechanicProfile=12;CarryCameraSummary(dest,source);Check(ReadCopy(dest,actual,sizeof(actual))==sizeof(bytes),"all-weapon guide scope retains native camera payload");g_weaponMechanicProfile=-1;CarryCameraSummary(dest,source);Check(ReadCopy(dest,actual,sizeof(actual))==0,"scope exit clears obsolete camera diagnostic data");
+ g_weaponMechanicProfile=profile;source->Release();dest->Release();puts("PASS: camera47 complete copied native camera payload, stale-shadow invalidation and profile isolation");
+}

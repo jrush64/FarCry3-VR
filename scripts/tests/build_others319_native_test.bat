@@ -1,0 +1,9 @@
+@echo off
+set "FC3ROOT=%~dp0..\..\"
+call "%~dp0..\vsenv32.bat" || exit /b 1
+cl /I"%FC3ROOT%third_party\openxr\include" /I"%FC3ROOT%third_party\imgui" /I"%FC3ROOT%third_party\minhook\include" /nologo /O2 /MT /EHsc /c /Fo"%FC3ROOT%build\stereo\hands303_native_fixture.obj" "%FC3ROOT%tests\hands303_native_fixture.cpp" || exit /b 1
+cl /I"%FC3ROOT%third_party\openxr\include" /I"%FC3ROOT%third_party\imgui" /I"%FC3ROOT%third_party\minhook\include" /nologo /O2 /MT /EHsc /c /Fo"%FC3ROOT%build\stereo\others319_bridge.obj" "%FC3ROOT%tests\hands303_render_bridge.cpp" || exit /b 1
+cl /I"%FC3ROOT%third_party\openxr\include" /I"%FC3ROOT%third_party\imgui" /nologo /O2 /MT /EHsc /I"%FC3ROOT%third_party\minhook\include" /Fo"%FC3ROOT%build\stereo\others319_native_test.obj" "%FC3ROOT%tests\others319_native_test.cpp" /link "%FC3ROOT%build\stereo\hands303_native_fixture.obj" "%FC3ROOT%build\stereo\di_probe.obj" "%FC3ROOT%build\stereo\dxbc_patch_pixel.obj" "%FC3ROOT%build\stereo\dxbc_patch.obj" "%FC3ROOT%build\stereo\fov_boost.obj" "%FC3ROOT%build\stereo\main_state.obj" "%FC3ROOT%build\stereo\mh_buffer.obj" "%FC3ROOT%build\stereo\mh_hde32.obj" "%FC3ROOT%build\stereo\mh_hook.obj" "%FC3ROOT%build\stereo\mh_trampoline.obj" "%FC3ROOT%build\stereo\stereo_proxy.obj" "%FC3ROOT%build\stereo\vigem_client.obj" "%FC3ROOT%build\stereo\vr_pad.obj" "%FC3ROOT%build\stereo\others319_bridge.obj" "%FC3ROOT%build\stereo\imgui.obj" "%FC3ROOT%build\stereo\imgui_draw.obj" "%FC3ROOT%build\stereo\imgui_widgets.obj" "%FC3ROOT%build\stereo\imgui_tables.obj" "%FC3ROOT%build\stereo\imgui_impl_dx11.obj" d3dcompiler.lib d3d11.lib shell32.lib user32.lib advapi32.lib dxguid.lib setupapi.lib /OUT:"%FC3ROOT%build\stereo\others319_native_test.exe"
+if errorlevel 1 exit /b 1
+"%FC3ROOT%build\stereo\others319_native_test.exe"
+

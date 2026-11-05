@@ -1,0 +1,45 @@
+void TestMagazinePull286(){
+ g_enabled=g_inGameplay=g_eyeViewsSet=g_handLeftValid=g_handRightValid=g_motionGun=true;g_flatViewActive=g_pistolMenu.open=false;
+ g_worldScale=1;g_aimActive=false;g_frame=100;g_weaponMechanicProfile=20;g_weaponMechanicFrame=g_frame;
+ fc3aim::SetVehicleStateForTest(0);fc3aim::SetNativeActionForTest128(0);
+ fc3pad::Controllers c={};c.active=true;fc3pad::Publish(c);fc3pad::SetGameplayControls(true);
+ auto& p=g_pistolReload;p=PistolReloadState{};p.enabled=p.basis=true;p.magazinePresent=false;p.looseFlying=p.catchArmed=true;
+ p.looseId=77;p.nextLooseId=78;p.looseAt=p.looseTick=1000;p.looseBody=p.hand=p.rootBody=HandIdentity();p.looseBody.m[11]=1;
+ p.handFrame=p.palmFrame=p.rootFrame=g_frame;p.rootEpoch=g_armPoseEpoch;
+ const auto hand=HandIdentity();for(int a=0;a<16;++a)g_handBody[1][a]=float(hand.m[a]);
+ g_pistolGuides.pullAssist286=true;g_pistolGuides.pullRange286=2.5f;g_pistolGuides.pullDistance286=.12f;
+ Check(!PistolGuideSettings{}.pullAssist286,"301 recovery is off by default");
+ const fc3pull286::Key key={123,0x100000002ULL,77,g_armPoseEpoch,20,fc3xr::ReferenceGeneration286()};p.looseKey286=key;
+ Check(!TickMagazinePullCore286(c,1000,key),"286 neutral grip does not move loose item");c.leftGrip=1;
+ Check(!TickMagazinePullCore286(c,1010,key)&&p.pull286.active,"286 pointed fresh squeeze targets existing loose object");
+ g_handBody[1][11]=-.13f;Check(TickMagazinePullCore286(c,1030,key)&&p.returning286,"286 backwards controller motion commits assisted return");
+ const auto nativeState=p.state,nativeWrapper=p.wrapper,nativeWeapon=p.weapon;const UINT nextId=p.nextLooseId;
+ ULONGLONG now=1030;
+ for(int n=0;n<20&&p.looseFlying;++n){now+=16;const double previous=p.looseBody.m[11];
+  Check(TickMagazinePullCore286(c,now,key),"286 active return advances through shipping movement helper");
+  Check(p.looseBody.m[11]<=previous&&previous-p.looseBody.m[11]<.097,"286 returned model advances smoothly at bounded speed");
+  PistolCatchLoose();
+ }
+ Check(p.held&&!p.looseFlying&&!p.returning286&&p.looseId==77&&p.nextLooseId==nextId,"286 existing catch owns identical object; no new magazine created");
+ Check(p.state==nativeState&&p.wrapper==nativeWrapper&&p.weapon==nativeWeapon&&!p.pending&&!p.cycle&&!fc3pad::ReloadOutput(),"286 recovery performs no native reload request or inventory mutation");
+ Check(!PistolTakeLoose(now),"286 occupied hand cannot create a duplicate magazine after recovery");
+ p.held=false;p.looseFlying=true;p.looseBody=HandIdentity();p.looseBody.m[11]=1;p.looseTick=now;p.returning286=true;p.returnAt286=now;p.returnKey286=key;p.returnVelocity286={1,2,3};
+ auto foreign=key;foreign.owner++;
+ Check(!TickMagazinePullCore286(c,now+16,foreign)&&!p.returning286&&p.looseFlying&&!p.held&&p.looseVelocity.y==2,"286 owner mismatch cancels return, restores flight and cannot catch");
+ p.returning286=true;p.returnAt286=now;p.returnKey286=key;g_handLeftValid=false;
+ Check(!TickMagazinePullCore286(c,now+16,key)&&!p.returning286,"286 missing tracked left hand cancels return");g_handLeftValid=true;
+ p.returning286=true;p.returnAt286=now;p.returnKey286=key;const unsigned reference=fc3xr::ReferenceGeneration286();fc3xr::Recenter();
+ Check(fc3xr::ReferenceGeneration286()!=reference,"286 recenter advances read-only physical reference token");
+ auto recentered=key;recentered.reference=fc3xr::ReferenceGeneration286();
+ Check(!TickMagazinePullCore286(c,now+16,recentered)&&!p.returning286,"286 recenter cannot complete old magazine recovery");
+ p.returning286=true;p.returnAt286=now;p.returnKey286=key;p.pullYaw301=g_bodyYaw;g_bodyYaw+=.1;
+ Check(!TickMagazinePullCore286(c,now+16,key)&&!p.returning286,"301 body rotation cancels a pull gesture");g_bodyYaw-=.1;
+ g_pistolGuides.pullAssist286=false;p.returning286=true;p.returnVelocity286={3,2,1};
+ Check(!TickMagazinePull286(c,now+16)&&!p.returning286&&p.looseVelocity.x==3,"301 disabled assist preserves ordinary ballistic motion");g_pistolGuides.pullAssist286=true;
+ fc3pull286::Key noNativeProof;Check(!ReadMagazineKey286(noNativeProof),"286 absent real native player/equipped sample refuses production ownership");
+ wchar_t folder[MAX_PATH],path[MAX_PATH];GetTempPathW(MAX_PATH,folder);GetTempFileNameW(folder,L"mpl",0,path);
+ g_pistolGuides.pullAssist286=false;g_pistolGuides.pullRange286=1.7f;g_pistolGuides.pullDistance286=.18f;
+ Check(SavePistolGuides(path),"286 per-family recovery settings save");g_pistolGuides.pullAssist286=true;g_pistolGuides.pullRange286=3;LoadPistolGuides(path);
+ Check(!g_pistolGuides.pullAssist286&&fabs(g_pistolGuides.pullRange286-1.7f)<1e-5&&fabs(g_pistolGuides.pullDistance286-.18f)<1e-5,"286 per-family recovery settings roundtrip");DeleteFileW(path);
+ puts("PASS:286 shipping return movement and existing catch preserve identity/native ammo; owner/tracking/recenter rejection, real native-proof refusal and settings roundtrip");
+}

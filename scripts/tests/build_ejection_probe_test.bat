@@ -1,0 +1,6 @@
+@echo off
+set "FC3ROOT=%~dp0..\..\"
+call "%~dp0..\vsenv32.bat" || exit /b 1
+cl /I"%FC3ROOT%third_party\imgui" /nologo /O2 /MT /EHsc /I"%FC3ROOT%third_party\minhook\include" /Fo"%FC3ROOT%build\stereo\ejection_probe_test.obj" "%FC3ROOT%tests\ejection_probe_test.cpp" /link "%FC3ROOT%build\stereo\aim_probe.obj" "%FC3ROOT%build\stereo\di_probe.obj" "%FC3ROOT%build\stereo\dxbc_patch_pixel.obj" "%FC3ROOT%build\stereo\dxbc_patch.obj" "%FC3ROOT%build\stereo\fov_boost.obj" "%FC3ROOT%build\stereo\main_state.obj" "%FC3ROOT%build\stereo\mh_buffer.obj" "%FC3ROOT%build\stereo\mh_hde32.obj" "%FC3ROOT%build\stereo\mh_hook.obj" "%FC3ROOT%build\stereo\mh_trampoline.obj" "%FC3ROOT%build\stereo\stereo_proxy.obj" "%FC3ROOT%build\stereo\vigem_client.obj" "%FC3ROOT%build\stereo\vr_pad.obj" "%FC3ROOT%build\stereo\xr_presenter.obj" d3d11.lib "%FC3ROOT%build\stereo\imgui.obj" "%FC3ROOT%build\stereo\imgui_draw.obj" "%FC3ROOT%build\stereo\imgui_widgets.obj" "%FC3ROOT%build\stereo\imgui_tables.obj" "%FC3ROOT%build\stereo\imgui_impl_dx11.obj" d3dcompiler.lib shell32.lib user32.lib advapi32.lib dxguid.lib setupapi.lib /OUT:"%FC3ROOT%build\stereo\ejection_probe_test.exe"
+if errorlevel 1 exit /b 1
+"%FC3ROOT%build\stereo\ejection_probe_test.exe"

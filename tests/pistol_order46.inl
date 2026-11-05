@@ -1,0 +1,33 @@
+void TestPistolOrder46(ID3D11Device* d,ID3D11DeviceContext* c){
+ const auto prior=g_pistolReload;const auto controls=fc3pad::Latest();const LONG frame=g_frame,profile=g_weaponMechanicProfile,mechanic=g_weaponMechanicFrame;
+ const bool motion=g_motionGun,guard=g_weaponMotionGuard,right=g_handRightValid,left=g_handLeftValid,two=g_twoHand;float hand[16];memcpy(hand,g_handBody[0],sizeof(hand));PistolEarlyPiece early[4];memcpy(early,g_pistolEarly,sizeof(early));
+ g_motionGun=g_handRightValid=g_handLeftValid=true;g_weaponMotionGuard=false;g_twoHand=false;g_weaponMechanicProfile=20;g_weaponMechanicFrame=++g_frame;
+ fc3pad::Controllers active={};active.active=true;fc3pad::Publish(active);g_pistolReload=PistolReloadState{};auto& p=g_pistolReload;p.enabled=true;p.parentValid=true;p.parentEpoch=g_armPoseEpoch;p.controllerParent=HandIdentity();
+ ID3D11Buffer* vb=Buffer(d,177904,D3D11_BIND_VERTEX_BUFFER),*ib=Buffer(d,32682,D3D11_BIND_INDEX_BUFFER),*camera=Buffer(d,896,D3D11_BIND_CONSTANT_BUFFER);UINT stride=32,offset=240;c->IASetVertexBuffers(0,1,&vb,&stride,&offset);c->IASetIndexBuffer(ib,DXGI_FORMAT_R16_UINT,0);c->VSSetConstantBuffers(1,1,&camera);
+ CameraSummary cam={};cam.mainView=1;cam.right[0]=cam.up[1]=cam.forward[2]=1;cam.xScale=1.5544246f;cam.yScale=2.790552f;camera->SetPrivateData(kCameraSummaryGuid,sizeof(cam),&cam);
+ memset(g_pistolEarly,0,sizeof(g_pistolEarly));Mat4 previous=HandIdentity(),current=HandIdentity(),relative=HandIdentity();previous.m[3]=1000;current.m[3]=1000.175;current.m[7]=.07;relative.m[3]=.04;relative.m[7]=-.02;
+ auto* e=PistolEarlySlot(13701,2100);e->valid=true;e->epoch=g_armPoseEpoch;e->rel=relative;
+ p.rootNative=previous;p.rootNativeFrame=g_frame-1;Mat4 controller=HandIdentity();controller.m[3]=.15;controller.m[7]=-.12;for(int i=0;i<16;++i)g_handBody[0][i]=float(controller.m[i]);
+ Check(Pistol1911PredictRoot(c,reinterpret_cast<uintptr_t>(vb)),"early attachment predicts corrected root");Check(p.rootFrame==g_frame&&p.rootNativeFrame==g_frame-1,"predictor leaves previous native FRAME explicitly stale");
+ const Mat4 housing=Multiply(current,relative),expected=Multiply(p.rootWorld,relative);float globals[88]={};WritePistolWorld(globals,housing);PistolFinalWorld(c,13701,2100,housing,globals);const Mat4 result=HullWorld(globals);
+ for(int i=0;i<16;++i)Check(std::fabs(result.m[i]-expected.m[i])<2e-6,"early housing uses learned offset rather than stale native root");
+ Mat4 inv={};Invert(previous,inv);const Mat4 broken=Multiply(p.rootWorld,Multiply(inv,housing));Check(Length(Sub({broken.m[3],broken.m[7],broken.m[11]},{expected.m[3],expected.m[7],expected.m[11]}))>.17,"fixture reproduces previous 175mm order-conditioned error");
+ p.rootNative=current;p.rootNativeFrame=g_frame;WritePistolWorld(globals,housing);PistolFinalWorld(c,13701,2100,housing,globals);const Mat4 after=HullWorld(globals);for(int i=0;i<16;++i)Check(std::fabs(after.m[i]-expected.m[i])<2e-6,"housing after FRAME matches same corrected root");
+ g_pistolReload=prior;fc3pad::Publish(controls);g_frame=frame;g_weaponMechanicProfile=profile;g_weaponMechanicFrame=mechanic;g_motionGun=motion;g_weaponMotionGuard=guard;g_handRightValid=right;g_handLeftValid=left;g_twoHand=two;memcpy(g_handBody[0],hand,sizeof(hand));memcpy(g_pistolEarly,early,sizeof(early));c->ClearState();vb->Release();ib->Release();camera->Release();
+ puts("PASS: 1911 order46 actual final-world path rejects stale native root; early/late housing agree; old branch reproduces >170mm error");
+}
+void TestPistolTrace46(ID3D11Device* d,ID3D11DeviceContext* c){
+ const auto oldTrace=g_pistolTrace46;const auto oldAnimation=g_animation;const LONG frame=g_frame,profile=g_weaponMechanicProfile;const bool gameplay=g_inGameplay,two=g_twoHand,menu=g_pistolMenu.open;
+ g_animation=AnimationProbe{};g_animation.enabled=true;g_animation.retry=GetTickCount64()+600000;g_pistolTrace46=PistolTrace46{};g_weaponMechanicProfile=20;g_inGameplay=true;g_pistolMenu.open=false;g_twoHand=false;++g_frame;
+ ID3D11Buffer* vb=Buffer(d,177904,D3D11_BIND_VERTEX_BUFFER),*cb0=Buffer(d,1024,D3D11_BIND_CONSTANT_BUFFER),*cb3=Buffer(d,2304,D3D11_BIND_CONSTANT_BUFFER),*cb4=Buffer(d,1008,D3D11_BIND_CONSTANT_BUFFER);UINT stride=32,offset=240;c->IASetVertexBuffers(0,1,&vb,&stride,&offset);
+ float world[256],palette[576],skin[252],corrected[256];for(int i=0;i<256;++i){world[i]=float(i)/256;corrected[i]=-world[i];}for(int i=0;i<576;++i)palette[i]=float(i)/576;for(int i=0;i<252;++i)skin[i]=float(i)/252;
+ cb0->SetPrivateData(kCbCopyGuid,sizeof(world),world);cb3->SetPrivateData(kCbCopyGuid,sizeof(palette),palette);cb4->SetPrivateData(kCbCopyGuid,sizeof(skin),skin);ID3D11Buffer* buffers[5]={cb0,nullptr,nullptr,cb3,cb4};c->VSSetConstantBuffers(0,5,buffers);DrawCall draw={};draw.a=168;draw.b=0;
+ Begin1911Trace46(c,draw);Check(g_pistolTrace46.pending,"1911 trace starts bounded source sample");Trace1911World46(c,corrected,sizeof(corrected),cb0);End1911Trace46(c,draw,1);
+ bool source=false,final=false,rawSkin=false,finalSkin=false,pose=false,missing=false;
+ for(const auto& r:g_animation.ring){if(r.kind==40){source=r.rawBytes==sizeof(world);Compare(r.raw,world,256,"source CB0 retains complete >352-byte globals");}if(r.kind==44){final=r.rawBytes==sizeof(corrected);Compare(r.raw,corrected,256,"bound corrected CB0 upload exact");}if(r.kind==42||r.kind==46){Check(r.rawBytes==sizeof(skin)&&r.explicitCount==sizeof(skin),"actual CB4 declared/copied sizes retained");Compare(r.raw,skin,252,"actual CB4 bytes exact");rawSkin|=r.kind==42;finalSkin|=r.kind==46;}if(r.kind==48)pose|=r.rawBytes==7*sizeof(Mat4)&&r.stateWords[1]==UINT(g_pistolReload.rootNativeFrame);if(r.kind==43)missing=r.rawBytes==0&&r.explicitCount==0;}
+ Check(source&&final&&rawSkin&&finalSkin&&pose&&missing,"trace includes full source/final globals, CB4, provenance and explicit missing data");
+ g_pistolTrace46.samples[0]=48;++g_frame;Begin1911Trace46(c,draw);Check(!g_pistolTrace46.pending,"one-handed capture budget stops");g_twoHand=true;++g_frame;Begin1911Trace46(c,draw);Check(g_pistolTrace46.pending&&g_pistolTrace46.samples[1]==1&&(g_pistolTrace46.record.flags&2),"two-handed capture has independent budget and mode metadata");End1911Trace46(c,draw,1);
+ for(int i=0;i<35;++i)Begin1911Trace46(c,draw);Check(!g_pistolTrace46.pending,"per-frame draw budget bounded");
+ g_pistolTrace46=oldTrace;g_animation=oldAnimation;g_frame=frame;g_weaponMechanicProfile=profile;g_inGameplay=gameplay;g_twoHand=two;g_pistolMenu.open=menu;c->ClearState();vb->Release();cb0->Release();cb3->Release();cb4->Release();
+ puts("PASS: trace46 full CB0/CB4 source/bound upload records, missing-data validity, double pose provenance and independent bounded one/two-handed budgets");
+}

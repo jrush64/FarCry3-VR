@@ -1,0 +1,25 @@
+#include "../src/selector_native_capture292.h"
+#include <cstdio>
+#include <cstdlib>
+#include <fstream>
+#include <iterator>
+void Check(bool ok,const char* name){printf("%s: %s\n",ok?"PASS":"FAIL",name);if(!ok)exit(1);}
+using namespace fc3visual292;
+std::vector<BYTE> Compile(const char* text,const char* entry,const char* profile){ID3DBlob *code=nullptr,*err=nullptr;HRESULT hr=D3DCompile(text,strlen(text),nullptr,nullptr,nullptr,entry,profile,0,0,&code,&err);if(err)printf("%s",(char*)err->GetBufferPointer());Drop(err);Check(SUCCEEDED(hr),"fixture shader compilation");std::vector<BYTE> bytes((BYTE*)code->GetBufferPointer(),(BYTE*)code->GetBufferPointer()+code->GetBufferSize());Drop(code);return bytes;}
+int main(){
+ ID3D11Device* d=nullptr;ID3D11DeviceContext* c=nullptr;Check(SUCCEEDED(D3D11CreateDevice(nullptr,D3D_DRIVER_TYPE_WARP,nullptr,0,nullptr,0,D3D11_SDK_VERSION,&d,nullptr,&c)),"material WARP device; no game/headset");
+ const char* text="cbuffer M:register(b0){float4 colour;};struct O{float4 a:SV_TARGET0;float4 n:SV_TARGET1;float4 m:SV_TARGET2;};O ps(){clip(colour.w);O o;o.a=float4(sqrt(colour.xyz),0);o.n=float4(sqrt(colour.xyz*.5),1);o.m=colour;return o;}float4 vs(uint i:SV_VERTEXID):SV_POSITION{return float4(i==2?3:-1,i==1?3:-1,.5,1);}";
+ auto vsCode=Compile(text,"vs","vs_4_0"),original=Compile(text,"ps","ps_4_0"),patched=original;{std::ofstream f("evidence/material294-fixture.bin",std::ios::binary);f.write((const char*)original.data(),original.size());}Check(fc3material294::LinearAlbedo(patched),"exact deferred albedo encoding recognized");Check(dxbc::VerifyChecksum(patched.data(),patched.size()),"patched DXBC checksum valid");
+ auto twice=patched;Check(!fc3material294::LinearAlbedo(twice)&&twice==patched,"linear material is unchanged on a second pass");
+ ID3D11VertexShader* vs=nullptr;ID3D11PixelShader *oldPs=nullptr,*newPs=nullptr;Check(SUCCEEDED(d->CreateVertexShader(vsCode.data(),vsCode.size(),nullptr,&vs))&&SUCCEEDED(d->CreatePixelShader(original.data(),original.size(),nullptr,&oldPs))&&SUCCEEDED(d->CreatePixelShader(patched.data(),patched.size(),nullptr,&newPs)),"original and selector-only material shaders accepted by D3D11");
+ D3D11_TEXTURE2D_DESC td={};td.Width=td.Height=td.MipLevels=td.ArraySize=td.SampleDesc.Count=1;td.Format=DXGI_FORMAT_R32G32B32A32_FLOAT;td.BindFlags=D3D11_BIND_RENDER_TARGET;
+ ID3D11Texture2D* targets[3]={};ID3D11RenderTargetView* rt[3]={};for(int i=0;i<3;++i){Check(SUCCEEDED(d->CreateTexture2D(&td,nullptr,&targets[i]))&&SUCCEEDED(d->CreateRenderTargetView(targets[i],nullptr,&rt[i])),"material MRT fixture");}
+ ID3D11Texture2D* read=nullptr;td.BindFlags=0;td.Usage=D3D11_USAGE_STAGING;td.CPUAccessFlags=D3D11_CPU_ACCESS_READ;d->CreateTexture2D(&td,nullptr,&read);
+ float colour[4]={.04f,.16f,.64f,1};D3D11_BUFFER_DESC bd={};bd.ByteWidth=16;bd.BindFlags=D3D11_BIND_CONSTANT_BUFFER;D3D11_SUBRESOURCE_DATA data={colour,0,0};ID3D11Buffer* cb=nullptr;d->CreateBuffer(&bd,&data,&cb);
+ c->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);c->VSSetShader(vs,nullptr,0);c->PSSetConstantBuffers(0,1,&cb);c->OMSetRenderTargets(3,rt,nullptr);D3D11_VIEWPORT vp={0,0,1,1,0,1};c->RSSetViewports(1,&vp);
+ float pixels[2][3][4]={};for(int pass=0;pass<2;++pass){c->PSSetShader(pass?newPs:oldPs,nullptr,0);c->Draw(3,0);for(int i=0;i<3;++i){c->CopyResource(read,targets[i]);D3D11_MAPPED_SUBRESOURCE map={};Check(SUCCEEDED(c->Map(read,0,D3D11_MAP_READ,0,&map)),"actual material pixel readback");memcpy(pixels[pass][i],map.pData,16);c->Unmap(read,0);}}
+ Check(std::fabs(pixels[0][0][0]-.2f)<1e-5f&&std::fabs(pixels[1][0][0]-.04f)<1e-5f&&std::fabs(pixels[1][0][2]-.64f)<1e-5f,"selector sends linear albedo rather than encoded G-buffer colour to sRGB output");Check(!memcmp(pixels[0][1],pixels[1][1],16)&&!memcmp(pixels[0][2],pixels[1][2],16),"normal square root and other material outputs are untouched");
+ colour[3]=-1;c->UpdateSubresource(cb,0,nullptr,colour,0,0);float clear[4]={.3f,.3f,.3f,.3f};c->ClearRenderTargetView(rt[0],clear);c->Draw(3,0);c->CopyResource(read,targets[0]);D3D11_MAPPED_SUBRESOURCE map={};c->Map(read,0,D3D11_MAP_READ,0,&map);Check(std::fabs(((float*)map.pData)[0]-.3f)<1e-5f,"native alpha discard remains active after conversion");c->Unmap(read,0);
+ std::ifstream native("evidence/native-material294.bin",std::ios::binary);Check(bool(native),"private native material fixture present");std::vector<BYTE> nativeCode((std::istreambuf_iterator<char>(native)),std::istreambuf_iterator<char>());Check(fc3material294::LinearAlbedo(nativeCode)&&dxbc::VerifyChecksum(nativeCode.data(),nativeCode.size()),"recorded native FC3 deferred material receives the same bounded conversion");ID3D11PixelShader* nativePs=nullptr;Check(SUCCEEDED(d->CreatePixelShader(nativeCode.data(),nativeCode.size(),nullptr,&nativePs)),"converted native shader accepted by D3D11");Drop(nativePs);
+ c->ClearState();Drop(cb);Drop(read);for(auto*& p:rt)Drop(p);for(auto*& p:targets)Drop(p);Drop(vs);Drop(oldPs);Drop(newPs);Drop(c);Drop(d);return 0;
+}
